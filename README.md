@@ -2,7 +2,14 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+Set the required environment variables in `.env` first:
+
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/mindmesh?schema=public"
+AUTH_SECRET="a-long-random-secret"
+```
+
+Then run the development server:
 
 ```bash
 npm run dev
@@ -14,7 +21,7 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000/login](http://localhost:3000/login) to create an account or sign in.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

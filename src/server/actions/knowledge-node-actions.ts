@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { KnowledgeNode } from "@prisma/client";
 import type { ZodError } from "zod";
 
-import { CURRENT_USER_ID } from "@/lib/current-user";
+import { getAuthenticatedUserId } from "@/lib/auth-user";
 import {
   createKnowledgeNodeSchema,
   deleteKnowledgeNodeSchema,
@@ -48,7 +48,10 @@ export async function createKnowledgeNodeAction(
   }
 
   try {
-    const node = await createKnowledgeNode(CURRENT_USER_ID, parsed.data);
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return { success: false, error: "You must be signed in." };
+
+    const node = await createKnowledgeNode(userId, parsed.data);
     revalidatePath("/graph");
     return { success: true, data: node };
   } catch (error) {
@@ -71,7 +74,10 @@ export async function updateKnowledgeNodeAction(
   }
 
   try {
-    const node = await updateKnowledgeNode(CURRENT_USER_ID, parsed.data);
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return { success: false, error: "You must be signed in." };
+
+    const node = await updateKnowledgeNode(userId, parsed.data);
 
     if (!node) {
       return { success: false, error: "That node no longer exists." };
@@ -95,7 +101,10 @@ export async function deleteKnowledgeNodeAction(
   }
 
   try {
-    const deleted = await deleteKnowledgeNode(CURRENT_USER_ID, parsed.data.id);
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return { success: false, error: "You must be signed in." };
+
+    const deleted = await deleteKnowledgeNode(userId, parsed.data.id);
 
     if (!deleted) {
       return { success: false, error: "That node no longer exists." };
