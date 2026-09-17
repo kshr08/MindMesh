@@ -10,10 +10,13 @@ import {
   useNodesState,
   type OnConnect,
   addEdge,
+  BackgroundVariant,
+  type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import type { KnowledgeFlowEdge, KnowledgeFlowNode } from "@/types/graph-flow";
+import { KnowledgeNode } from "@/components/graph/knowledge-node";
 
 interface GraphClientProps {
   initialNodes: KnowledgeFlowNode[];
@@ -27,10 +30,13 @@ export default function GraphClient({
   const [nodes, , onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
+  const nodeTypes: NodeTypes = { knowledge: KnowledgeNode };
   const onConnect: OnConnect = useCallback(
     (connection) => setEdges((current) => addEdge(connection, current)),
     [setEdges],
   );
+
+
 
   if (nodes.length === 0) {
     return (
@@ -46,16 +52,19 @@ export default function GraphClient({
     <div className="h-full w-full flex-1">
       <ReactFlow
         nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        fitView
+  edges={edges}
+  nodeTypes={nodeTypes}
+  onNodesChange={onNodesChange}
+  onEdgesChange={onEdgesChange}
+  onConnect={onConnect}
+  colorMode="dark"
+  defaultEdgeOptions={{ style: { stroke: "#52525b", strokeWidth: 1.5 } }}
+  fitView
       >
-        <Background />
-        <Controls />
-        <MiniMap pannable zoomable />
-      </ReactFlow>
+        <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#27272a" />
+  <Controls className="..." />
+  <MiniMap pannable zoomable className="..." maskColor="rgba(9, 9, 11, 0.6)" nodeColor="#3f3f46" />
+</ReactFlow>
     </div>
   );
 }

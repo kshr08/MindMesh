@@ -2,7 +2,7 @@ import type { KnowledgeGraph } from "@/types/knowledge-graph";
 import type { KnowledgeFlowEdge, KnowledgeFlowNode } from "@/types/graph-flow";
 
 const COLUMN_WIDTH = 240;
-const ROW_HEIGHT = 140;
+const ROW_HEIGHT = 180;
 const COLUMNS = 4;
 
 export function toFlowGraph(graph: KnowledgeGraph): {
@@ -11,6 +11,7 @@ export function toFlowGraph(graph: KnowledgeGraph): {
 } {
   const nodes: KnowledgeFlowNode[] = graph.nodes.map((node, index) => ({
     id: node.id,
+    type: "knowledge",
     position: {
       x: (index % COLUMNS) * COLUMN_WIDTH,
       y: Math.floor(index / COLUMNS) * ROW_HEIGHT,
