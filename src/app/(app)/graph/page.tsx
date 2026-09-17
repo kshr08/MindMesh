@@ -8,18 +8,18 @@ export default async function GraphPage() {
   const { nodes, edges } = toFlowGraph(graph);
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-4 border-b border-border px-6 py-3">
-        <h1 className="text-sm font-medium text-foreground">
+    <div className="flex h-screen flex-col bg-zinc-950">
+      <header className="flex items-center gap-4 border-b border-zinc-800 bg-zinc-950 px-6 py-3">
+        <h1 className="text-sm font-medium text-zinc-100">
           {graph.nodeCount} knowledge{" "}
           {graph.nodeCount === 1 ? "node" : "nodes"}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-zinc-500">
           {graph.relationCount}{" "}
           {graph.relationCount === 1 ? "relationship" : "relationships"}
         </p>
       </header>
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 bg-zinc-950">
         <GraphClient initialNodes={nodes} initialEdges={edges} />
       </div>
     </div>
