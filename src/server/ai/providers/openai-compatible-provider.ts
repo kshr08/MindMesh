@@ -29,7 +29,7 @@ export class OpenAICompatibleProvider implements AIService {
           { role: "user", content: knowledgeExtractionPrompt(input, context) },
         ],
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(90000),
     });
 
     if (!response.ok) throw new Error(`AI provider returned ${response.status}.`);

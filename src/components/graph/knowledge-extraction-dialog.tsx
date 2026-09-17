@@ -73,17 +73,27 @@ export function KnowledgeExtractionDialog({
         return;
       }
 
-      setNodes(result.data.nodes.map((node) => ({ ...node, selected: true })));
-      setRelationships(result.data.relationships.map((relationship) => ({ ...relationship, selected: true })));
+      const reviewNodes = result.data.nodes.map((node) => ({
+        ...node,
+        selected: !node.existing,
+      }));
+      setNodes(reviewNodes);
+      setRelationships(
+        result.data.relationships.map((relationship) => ({
+          ...relationship,
+          selected: endpointsAreAvailable(relationship, reviewNodes),
+        })),
+      );
       setHasProposal(true);
     });
   }
 
   function updateNode(index: number, update: Partial<ReviewNode>) {
     const previousTitle = nodes[index]?.title;
-    setNodes((current) =>
-      current.map((node, nodeIndex) => (nodeIndex === index ? { ...node, ...update } : node)),
+    const nextNodes = nodes.map((node, nodeIndex) =>
+      nodeIndex === index ? { ...node, ...update } : node,
     );
+    setNodes(nextNodes);
 
     setRelationships((current) =>
       current.map((relationship) => {
@@ -102,33 +112,34 @@ export function KnowledgeExtractionDialog({
               }
             : relationship;
 
-        if (
-          update.selected === false &&
-          (relationship.sourceTitle === previousTitle || relationship.targetTitle === previousTitle)
-        ) {
-          return { ...renamedRelationship, selected: false };
-        }
-
-        return renamedRelationship;
+        return endpointsAreAvailable(renamedRelationship, nextNodes)
+          ? renamedRelationship
+          : { ...renamedRelationship, selected: false };
       }),
     );
   }
 
-  function endpointsAreSelected(relationship: ReviewRelationship, reviewNodes = nodes) {
+  function endpointsAreAvailable(
+    relationship: KnowledgeProposal["relationships"][number],
+    reviewNodes = nodes,
+  ) {
     const source = reviewNodes.find((node) => node.title === relationship.sourceTitle);
     const target = reviewNodes.find((node) => node.title === relationship.targetTitle);
-    return Boolean(source?.selected && target?.selected);
+    return Boolean(
+      (source?.existing || source?.selected) &&
+      (target?.existing || target?.selected),
+    );
   }
 
   const relationshipSelectable = relationships.map((relationship) =>
-    endpointsAreSelected(relationship),
+    endpointsAreAvailable(relationship),
   );
 
   function handleImport() {
     setError(null);
     startImporting(async () => {
       const safeRelationships = relationships.map((relationship) =>
-        endpointsAreSelected(relationship)
+        endpointsAreAvailable(relationship)
           ? relationship
           : { ...relationship, selected: false },
       );
@@ -194,7 +205,8 @@ export function KnowledgeExtractionDialog({
                   <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
-                      checked={node.selected}
+                      checked={node.existing || node.selected}
+                      disabled={node.existing}
                       onChange={(event) => updateNode(index, { selected: event.target.checked })}
                       aria-label={`Select ${node.title}`}
                     />
@@ -220,7 +232,7 @@ export function KnowledgeExtractionDialog({
                     className="min-h-16 text-xs"
                     aria-label="Proposed node description"
                   />
-                  <p className="text-xs text-zinc-500">{node.existing ? "Already exists in your graph" : "New"}</p>
+                  <p className="text-xs text-zinc-500">{node.existing ? "Existing" : "New"}</p>
                 </div>
               ))}
             </section>
@@ -261,7 +273,11 @@ export function KnowledgeExtractionDialog({
           {hasProposal ? (
             <>
               <Button type="button" variant="outline" onClick={() => setHasProposal(false)} disabled={isImporting}>Back</Button>
-              <Button type="button" onClick={handleImport} disabled={isImporting || nodes.every((node) => !node.selected)}>
+              <Button
+                type="button"
+                onClick={handleImport}
+                disabled={isImporting || nodes.every((node) => node.existing || !node.selected)}
+              >
                 {isImporting ? "Adding to your graph..." : "Import selected"}
               </Button>
             </>
