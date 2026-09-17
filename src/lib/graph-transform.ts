@@ -1,5 +1,6 @@
 import type { KnowledgeGraph } from "@/types/knowledge-graph";
 import type { KnowledgeFlowEdge, KnowledgeFlowNode } from "@/types/graph-flow";
+import { RELATION_TYPE_LABEL } from "@/lib/validation/knowledge-relation";
 
 const COLUMN_WIDTH = 240;
 const ROW_HEIGHT = 180;
@@ -29,6 +30,7 @@ export function toFlowGraph(graph: KnowledgeGraph): {
     id: relation.id,
     source: relation.sourceId,
     target: relation.targetId,
+    label: RELATION_TYPE_LABEL[relation.relationType],
     data: { relationType: relation.relationType },
   }));
 
