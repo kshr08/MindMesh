@@ -1,4 +1,4 @@
-import { Prisma, type KnowledgeNode, type KnowledgeRelation } from "@prisma/client";
+import { type KnowledgeNode, type KnowledgeRelation } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { normalizeTitle } from "@/lib/normalize-title";
@@ -32,6 +32,20 @@ export async function importKnowledgeForUser(
       createdNodes.push(node);
     }
 
+    const nodeIds = [...nodesByTitle.values()].map((node) => node.id);
+    const existingRelations = await tx.knowledgeRelation.findMany({
+      where: {
+        sourceId: { in: nodeIds },
+        targetId: { in: nodeIds },
+      },
+      select: { sourceId: true, targetId: true, relationType: true },
+    });
+    const relationKeys = new Set(
+      existingRelations.map((relation) =>
+        `${relation.sourceId}:${relation.targetId}:${relation.relationType}`,
+      ),
+    );
+
     const relations: KnowledgeRelation[] = [];
     for (const relationship of input.relationships) {
       if (!relationship.selected) continue;
@@ -42,21 +56,18 @@ export async function importKnowledgeForUser(
         throw new Error("A selected relationship references an unavailable node.");
       }
 
-      try {
-        const relation = await tx.knowledgeRelation.create({
-          data: {
-            sourceId: source.id,
-            targetId: target.id,
-            relationType: relationship.relationType,
-          },
-        });
-        relations.push(relation);
-      } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-          continue;
-        }
-        throw error;
-      }
+      const relationKey = `${source.id}:${target.id}:${relationship.relationType}`;
+      if (relationKeys.has(relationKey)) continue;
+
+      const relation = await tx.knowledgeRelation.create({
+        data: {
+          sourceId: source.id,
+          targetId: target.id,
+          relationType: relationship.relationType,
+        },
+      });
+      relationKeys.add(relationKey);
+      relations.push(relation);
     }
 
     return { nodes: createdNodes, relations };
