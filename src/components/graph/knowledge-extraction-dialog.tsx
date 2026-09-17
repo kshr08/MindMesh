@@ -84,21 +84,58 @@ export function KnowledgeExtractionDialog({
     setNodes((current) =>
       current.map((node, nodeIndex) => (nodeIndex === index ? { ...node, ...update } : node)),
     );
-    if (update.title && previousTitle && update.title !== previousTitle) {
-      setRelationships((current) =>
-        current.map((relationship) => ({
-          ...relationship,
-          sourceTitle: relationship.sourceTitle === previousTitle ? update.title! : relationship.sourceTitle,
-          targetTitle: relationship.targetTitle === previousTitle ? update.title! : relationship.targetTitle,
-        })),
-      );
-    }
+
+    setRelationships((current) =>
+      current.map((relationship) => {
+        const renamedRelationship =
+          update.title !== undefined && previousTitle && update.title !== previousTitle
+            ? {
+                ...relationship,
+                sourceTitle:
+                  relationship.sourceTitle === previousTitle
+                    ? update.title
+                    : relationship.sourceTitle,
+                targetTitle:
+                  relationship.targetTitle === previousTitle
+                    ? update.title
+                    : relationship.targetTitle,
+              }
+            : relationship;
+
+        if (
+          update.selected === false &&
+          (relationship.sourceTitle === previousTitle || relationship.targetTitle === previousTitle)
+        ) {
+          return { ...renamedRelationship, selected: false };
+        }
+
+        return renamedRelationship;
+      }),
+    );
   }
+
+  function endpointsAreSelected(relationship: ReviewRelationship, reviewNodes = nodes) {
+    const source = reviewNodes.find((node) => node.title === relationship.sourceTitle);
+    const target = reviewNodes.find((node) => node.title === relationship.targetTitle);
+    return Boolean(source?.selected && target?.selected);
+  }
+
+  const relationshipSelectable = relationships.map((relationship) =>
+    endpointsAreSelected(relationship),
+  );
 
   function handleImport() {
     setError(null);
     startImporting(async () => {
-      const result = await importKnowledgeProposalAction({ nodes, relationships });
+      const safeRelationships = relationships.map((relationship) =>
+        endpointsAreSelected(relationship)
+          ? relationship
+          : { ...relationship, selected: false },
+      );
+      const result = await importKnowledgeProposalAction({
+        nodes,
+        relationships: safeRelationships,
+      });
       if (!result.success) {
         setError(result.error);
         return;
@@ -195,7 +232,8 @@ export function KnowledgeExtractionDialog({
                 <label key={`${relationship.sourceTitle}-${relationship.targetTitle}-${index}`} className="flex items-center gap-3 rounded-md border border-zinc-800 p-3 text-sm">
                   <input
                     type="checkbox"
-                    checked={relationship.selected}
+                    checked={relationship.selected && relationshipSelectable[index]}
+                    disabled={!relationshipSelectable[index]}
                     onChange={(event) =>
                       setRelationships((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, selected: event.target.checked } : item))
                     }
