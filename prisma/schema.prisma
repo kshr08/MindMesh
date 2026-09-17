@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum NodeType {
+  CONCEPT
+  PROJECT
+  SKILL
+  TECHNOLOGY
+  RESOURCE
+}
+
+enum ConfidenceStatus {
+  NEW
+  FAMILIAR
+  LEARNING
+  CONFIDENT
+  NEEDS_REVIEW
+}
+
+enum RelationType {
+  USES
+  DEPENDS_ON
+  PREREQUISITE_FOR
+  RELATED_TO
+  PART_OF
+  LEARNED_THROUGH
+  IMPLEMENTED_IN
+  SIMILAR_TO
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+
+  nodes KnowledgeNode[]
+
+  @@map("users")
+}
+
+model KnowledgeNode {
+  id     String           @id @default(cuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  type        NodeType
+  status      ConfidenceStatus @default(NEW)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastReviewed DateTime?
+
+  outgoing KnowledgeRelation[] @relation("SourceNode")
+  incoming KnowledgeRelation[] @relation("TargetNode")
+
+  @@index([userId])
+  @@index([userId, type])
+  @@map("knowledge_nodes")
+}
+
+model KnowledgeRelation {
+  id           String       @id @default(cuid())
+  sourceId     String
+  targetId     String
+  relationType RelationType
+
+  source KnowledgeNode @relation("SourceNode", fields: [sourceId], references: [id], onDelete: Cascade)
+  target KnowledgeNode @relation("TargetNode", fields: [targetId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([sourceId, targetId, relationType])
+  @@index([sourceId])
+  @@index([targetId])
+  @@map("knowledge_relations")
+}
