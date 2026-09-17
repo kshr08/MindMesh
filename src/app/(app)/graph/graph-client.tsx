@@ -10,6 +10,7 @@ import {
   useEdgesState,
   useNodesState,
   type OnConnect,
+  type ReactFlowInstance,
   BackgroundVariant,
   type NodeTypes,
 } from "@xyflow/react";
@@ -25,6 +26,8 @@ import {
 } from "@/components/graph/node-form-dialog";
 import { DeleteNodeDialog } from "@/components/graph/delete-node-dialog";
 import { NodeDetailsPanel } from "@/components/graph/node-details-panel";
+import { GraphFilters } from "@/components/graph/graph-filters";
+import { GraphSearch } from "@/components/graph/graph-search";
 import {
   RelationFormDialog,
   type CreatedRelationResult,
@@ -78,6 +81,12 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [nodeTypeFilter, setNodeTypeFilter] = useState<KnowledgeFlowNode["data"]["type"] | "">("");
+  const [statusFilter, setStatusFilter] = useState<KnowledgeFlowNode["data"]["status"] | "">("");
+  const [reactFlowInstance, setReactFlowInstance] = useState<
+    ReactFlowInstance<KnowledgeFlowNode, KnowledgeFlowEdge> | null
+  >(null);
 
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [isEditOpen, setEditOpen] = useState(false);
@@ -117,8 +126,72 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
     [nodes],
   );
 
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
-  const selectedEdge = edges.find((e) => e.id === selectedEdgeId) ?? null;
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const matchesFilters = (
+    node: KnowledgeFlowNode,
+    query = normalizedSearchQuery,
+    type = nodeTypeFilter,
+    status = statusFilter,
+  ) =>
+    (!query || node.data.title.toLowerCase().includes(query)) &&
+    (!type || node.data.type === type) &&
+    (!status || node.data.status === status);
+
+  const visibleNodes = nodes.filter((node) => matchesFilters(node));
+  const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
+  const visibleEdges = edges.filter(
+    (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target),
+  );
+  const selectedNode = visibleNodes.find((node) => node.id === selectedNodeId) ?? null;
+  const selectedEdge = visibleEdges.find((edge) => edge.id === selectedEdgeId) ?? null;
+  const hasActiveFilters = Boolean(normalizedSearchQuery || nodeTypeFilter || statusFilter);
+
+  function clearSelectionIfHidden(
+    query: string,
+    type: KnowledgeFlowNode["data"]["type"] | "",
+    status: KnowledgeFlowNode["data"]["status"] | "",
+  ) {
+    const selected = nodes.find((node) => node.id === selectedNodeId);
+    if (selected && !matchesFilters(selected, query, type, status)) {
+      setSelectedNodeId(null);
+    }
+  }
+
+  function handleSearchChange(query: string) {
+    setSearchQuery(query);
+    clearSelectionIfHidden(query.trim().toLowerCase(), nodeTypeFilter, statusFilter);
+  }
+
+  function handleNodeTypeChange(type: KnowledgeFlowNode["data"]["type"] | "") {
+    setNodeTypeFilter(type);
+    clearSelectionIfHidden(normalizedSearchQuery, type, statusFilter);
+  }
+
+  function handleStatusChange(status: KnowledgeFlowNode["data"]["status"] | "") {
+    setStatusFilter(status);
+    clearSelectionIfHidden(normalizedSearchQuery, nodeTypeFilter, status);
+  }
+
+  function clearFilters() {
+    setNodeTypeFilter("");
+    setStatusFilter("");
+  }
+
+  function clearAllFilters() {
+    setSearchQuery("");
+    clearFilters();
+  }
+
+  function focusNode(node: KnowledgeFlowNode) {
+    setSelectedNodeId(node.id);
+    setSelectedEdgeId(null);
+    reactFlowInstance?.fitView({
+      nodes: [node],
+      duration: 400,
+      maxZoom: 1.4,
+      padding: 0.6,
+    });
+  }
 
   function handleCreated(result: CreatedNodeResult) {
     setNodes((current) => [...current, toFlowNode(result, current.length)]);
@@ -200,9 +273,29 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
   return (
     <div className="relative h-full w-full flex-1">
       <div className="absolute left-4 top-4 z-10">
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          Add node
-        </Button>
+        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-zinc-800/80 bg-zinc-950/90 p-2 shadow-lg backdrop-blur-sm">
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            Add node
+          </Button>
+          <GraphSearch
+            query={searchQuery}
+            nodes={visibleNodes}
+            onQueryChange={handleSearchChange}
+            onSelect={focusNode}
+          />
+          <GraphFilters
+            nodeType={nodeTypeFilter}
+            status={statusFilter}
+            onNodeTypeChange={handleNodeTypeChange}
+            onStatusChange={handleStatusChange}
+            onClear={clearFilters}
+          />
+          {hasActiveFilters && (
+            <p className="pb-2 text-xs text-zinc-500" aria-live="polite">
+              Showing {visibleNodes.length} of {nodes.length} nodes
+            </p>
+          )}
+        </div>
       </div>
 
       {selectedNode && (
@@ -258,9 +351,10 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
       )}
 
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={visibleNodes}
+        edges={visibleEdges}
         nodeTypes={nodeTypes}
+        onInit={setReactFlowInstance}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -302,6 +396,18 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
           nodeColor="#3f3f46"
         />
       </ReactFlow>
+
+      {hasActiveFilters && visibleNodes.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center">
+          <div className="pointer-events-auto rounded-lg border border-zinc-800 bg-zinc-950/95 px-6 py-5 text-center shadow-xl backdrop-blur-sm">
+            <p className="text-sm text-zinc-200">No matching knowledge nodes.</p>
+            <p className="mt-1 text-xs text-zinc-500">Try changing your search or filters.</p>
+            <Button type="button" variant="outline" size="sm" onClick={clearAllFilters} className="mt-4">
+              Clear filters
+            </Button>
+          </div>
+        </div>
+      )}
 
       <NodeFormDialog
         key={`create-${isCreateOpen}`}
