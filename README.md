@@ -7,6 +7,9 @@ Set the required environment variables in `.env` first:
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/mindmesh?schema=public"
 AUTH_SECRET="a-long-random-secret"
+AI_API_KEY="provider-key-for-server-only-use"
+AI_BASE_URL="https://api.openai.com/v1"
+AI_MODEL="gpt-4o-mini"
 ```
 
 Then run the development server:

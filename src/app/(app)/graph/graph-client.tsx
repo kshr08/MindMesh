@@ -19,6 +19,7 @@ import type { RelationType } from "@prisma/client";
 
 import type { KnowledgeFlowEdge, KnowledgeFlowNode } from "@/types/graph-flow";
 import { KnowledgeNode } from "@/components/graph/knowledge-node";
+import type { ImportedKnowledgeResult } from "@/server/actions/knowledge-extraction-actions";
 import { Button } from "@/components/ui/button";
 import {
   NodeFormDialog,
@@ -28,6 +29,9 @@ import { DeleteNodeDialog } from "@/components/graph/delete-node-dialog";
 import { NodeDetailsPanel } from "@/components/graph/node-details-panel";
 import { GraphFilters } from "@/components/graph/graph-filters";
 import { GraphSearch } from "@/components/graph/graph-search";
+import {
+  KnowledgeExtractionDialog,
+} from "@/components/graph/knowledge-extraction-dialog";
 import {
   RelationFormDialog,
   type CreatedRelationResult,
@@ -91,6 +95,7 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [isEditOpen, setEditOpen] = useState(false);
   const [isDeleteOpen, setDeleteOpen] = useState(false);
+  const [isExtractionOpen, setExtractionOpen] = useState(false);
 
   // Relationship creation: onConnect no longer adds a local-only edge.
   // It captures the pending connection and opens the relation dialog;
@@ -231,6 +236,20 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
     router.refresh();
   }
 
+  function handleKnowledgeImported(result: ImportedKnowledgeResult) {
+    setNodes((current) => [
+      ...current,
+      ...result.nodes.map((node, index) =>
+        toFlowNode(node, current.length + index),
+      ),
+    ]);
+    setEdges((current) => [
+      ...current,
+      ...result.relations.map((relation) => toFlowEdge(relation)),
+    ]);
+    router.refresh();
+  }
+
   function handleDeleteRelation() {
     if (!selectedEdge) return;
     setRelationError(null);
@@ -256,7 +275,12 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
           <p className="text-sm text-zinc-400">
             Your knowledge graph is empty. Nodes you add will appear here.
           </p>
-          <Button onClick={() => setCreateOpen(true)}>Add your first node</Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setCreateOpen(true)}>Add your first node</Button>
+            <Button variant="outline" onClick={() => setExtractionOpen(true)}>
+              Extract knowledge
+            </Button>
+          </div>
         </div>
 
         <NodeFormDialog
@@ -265,6 +289,11 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
           onOpenChange={setCreateOpen}
           mode="create"
           onCreated={handleCreated}
+        />
+        <KnowledgeExtractionDialog
+          open={isExtractionOpen}
+          onOpenChange={setExtractionOpen}
+          onImported={handleKnowledgeImported}
         />
       </div>
     );
@@ -276,6 +305,9 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-zinc-800/80 bg-zinc-950/90 p-2 shadow-lg backdrop-blur-sm">
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             Add node
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setExtractionOpen(true)}>
+            Extract knowledge
           </Button>
           <GraphSearch
             query={searchQuery}
@@ -442,6 +474,12 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
         }}
         connection={pendingConnection}
         onCreated={handleRelationCreated}
+      />
+
+      <KnowledgeExtractionDialog
+        open={isExtractionOpen}
+        onOpenChange={setExtractionOpen}
+        onImported={handleKnowledgeImported}
       />
     </div>
   );
