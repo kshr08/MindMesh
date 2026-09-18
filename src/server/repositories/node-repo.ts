@@ -33,12 +33,6 @@ export interface UpdateNodeData {
   description: string | null;
 }
 
-/**
- * Scoped update: verifies ownership and updates atomically inside a
- * transaction. Returns null if no node with this id belongs to userId,
- * so the caller can distinguish "not found / not yours" from a thrown
- * error rather than silently updating (or leaking) another user's row.
- */
 export async function updateNodeForUser(
   id: string,
   userId: string,
@@ -57,12 +51,27 @@ export async function updateNodeForUser(
 }
 
 /**
- * Scoped delete: the ownership check is baked into the WHERE clause of
- * a single deleteMany, so it's already atomic. Associated relations are
- * removed automatically via the existing cascade
- * (KnowledgeRelation.sourceId/targetId onDelete: Cascade) — no extra
- * relation-repo call needed.
+ * Marks an owned node as reviewed now.
+ *
+ * The ownership check is part of the update WHERE clause, so a user
+ * cannot update another user's node even if they know its id.
  */
+export async function markNodeReviewedForUser(
+  id: string,
+  userId: string,
+): Promise<KnowledgeNode | null> {
+  const result = await db.knowledgeNode.updateMany({
+    where: { id, userId },
+    data: { lastReviewed: new Date() },
+  });
+
+  if (result.count === 0) return null;
+
+  return db.knowledgeNode.findUnique({
+    where: { id },
+  });
+}
+
 export async function deleteNodeForUser(id: string, userId: string): Promise<boolean> {
   const { count } = await db.knowledgeNode.deleteMany({
     where: { id, userId },

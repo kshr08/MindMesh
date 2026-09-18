@@ -74,6 +74,7 @@ function toFlowNode(result: CreatedNodeResult, index: number): KnowledgeFlowNode
       type: result.type,
       status: result.status,
       description: result.description,
+      lastReviewed: null,
     },
   };
 }
@@ -224,6 +225,7 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
                 type: result.type,
                 status: result.status,
                 description: result.description,
+                lastReviewed: n.data.lastReviewed,
               },
             }
           : n,
@@ -281,6 +283,7 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
             type: node.type,
             status: node.status,
             description: node.description,
+            lastReviewed: null,
           },
         };
       }),
@@ -378,6 +381,21 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
           onEdit={() => setEditOpen(true)}
           onDelete={() => setDeleteOpen(true)}
           onClose={() => setSelectedNodeId(null)}
+          onReviewed={(lastReviewed) => {
+            setNodes((current) =>
+              current.map((n) =>
+                      n.id === selectedNode.id
+                  ? {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        lastReviewed,
+                      },
+                    }
+                  : n,
+              ),
+            );
+          }}
         />
       )}
 

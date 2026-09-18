@@ -7,6 +7,8 @@ export interface KnowledgeNodeData extends Record<string, unknown> {
   type: NodeType;
   status: ConfidenceStatus;
   description: string | null;
+  lastReviewed: string | null;
 }
 
-export type KnowledgeFlowNode = Node<KnowledgeNodeData, "knowledge">;export type KnowledgeFlowEdge = Edge<{ relationType: string }>;
+export type KnowledgeFlowNode = Node<KnowledgeNodeData, "knowledge">;
+export type KnowledgeFlowEdge = Edge<{ relationType: string }>;

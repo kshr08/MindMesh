@@ -3,6 +3,7 @@ import {
   createNode,
   deleteNodeForUser,
   findNodesByUserId,
+  markNodeReviewedForUser,
   updateNodeForUser,
 } from "@/server/repositories/node-repo";
 import {
@@ -53,6 +54,13 @@ export function updateKnowledgeNode(
     status: input.status,
     description: input.description,
   });
+}
+
+export function markKnowledgeNodeReviewed(
+  userId: string,
+  id: string,
+): Promise<KnowledgeNode | null> {
+  return markNodeReviewedForUser(id, userId);
 }
 
 export function deleteKnowledgeNode(userId: string, id: string): Promise<boolean> {

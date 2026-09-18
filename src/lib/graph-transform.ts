@@ -1,5 +1,8 @@
 import type { KnowledgeGraph } from "@/types/knowledge-graph";
-import type { KnowledgeFlowEdge, KnowledgeFlowNode } from "@/types/graph-flow";
+import type {
+  KnowledgeFlowEdge,
+  KnowledgeFlowNode,
+} from "@/types/graph-flow";
 import { RELATION_TYPE_LABEL } from "@/lib/validation/knowledge-relation";
 import { computeGraphLayout } from "@/lib/graph-layout";
 
@@ -17,6 +20,7 @@ export function toFlowGraph(graph: KnowledgeGraph): {
 
   const nodes: KnowledgeFlowNode[] = graph.nodes.map((node) => {
     const position = layoutPositions.get(node.id) ?? { x: 0, y: 0 };
+
     return {
       id: node.id,
       type: "knowledge",
@@ -27,6 +31,7 @@ export function toFlowGraph(graph: KnowledgeGraph): {
         type: node.type,
         status: node.status,
         description: node.description,
+        lastReviewed: node.lastReviewed?.toISOString() ?? null,
       },
     };
   });
