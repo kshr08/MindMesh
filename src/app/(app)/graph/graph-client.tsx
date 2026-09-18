@@ -40,10 +40,12 @@ import {
 import { RELATION_TYPE_LABEL } from "@/lib/validation/knowledge-relation";
 import { deleteKnowledgeRelationAction } from "@/server/actions/knowledge-relation-actions";
 import { computeGraphLayout } from "@/lib/graph-layout";
-
+import { KnowledgeReviewPanel } from "@/components/graph/knowledge-review-panel";
+import type { KnowledgeFreshnessSummary } from "@/types/knowledge-freshness";
 interface GraphClientProps {
   initialNodes: KnowledgeFlowNode[];
   initialEdges: KnowledgeFlowEdge[];
+  freshness: KnowledgeFreshnessSummary;
 }
 
 // Fallback placement for a single brand-new node created with no
@@ -89,7 +91,7 @@ function toFlowEdge(result: CreatedRelationResult): KnowledgeFlowEdge {
   };
 }
 
-export default function GraphClient({ initialNodes, initialEdges }: GraphClientProps) {
+export default function GraphClient({ initialNodes, initialEdges, freshness }: GraphClientProps) {
   const router = useRouter();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -374,6 +376,9 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
           )}
         </div>
       </div>
+      <KnowledgeReviewPanel summary={freshness}
+      nodes={nodes}
+      onSelectNode={focusNode} />
 
       {selectedNode && (
         <NodeDetailsPanel
