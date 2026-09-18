@@ -8,7 +8,9 @@ import {
   importKnowledgeProposalAction,
   type ImportedKnowledgeResult,
 } from "@/server/actions/knowledge-extraction-actions";
+import { suggestKnowledgeRelationshipsAction } from "@/server/actions/knowledge-relationship-actions";
 import type { KnowledgeProposal } from "@/server/ai/types";
+import type { RelationshipSuggestionProposal } from "@/server/ai/relationship-suggestion-schema";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -44,6 +46,7 @@ const RELATION_TYPES: { value: RelationType; label: string }[] = [
 
 type ReviewNode = KnowledgeProposal["nodes"][number] & { selected: boolean };
 type ReviewRelationship = KnowledgeProposal["relationships"][number] & { selected: boolean };
+type ReviewSuggestion = RelationshipSuggestionProposal["relationships"][number];
 
 interface KnowledgeExtractionDialogProps {
   open: boolean;
@@ -59,9 +62,12 @@ export function KnowledgeExtractionDialog({
   const [notes, setNotes] = useState("");
   const [nodes, setNodes] = useState<ReviewNode[]>([]);
   const [relationships, setRelationships] = useState<ReviewRelationship[]>([]);
+  const [suggestions, setSuggestions] = useState<ReviewSuggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [hasProposal, setHasProposal] = useState(false);
+  const [hasRequestedSuggestions, setHasRequestedSuggestions] = useState(false);
   const [isExtracting, startExtracting] = useTransition();
+  const [isSuggesting, startSuggesting] = useTransition();
   const [isImporting, startImporting] = useTransition();
 
   function handleExtract() {
@@ -84,6 +90,8 @@ export function KnowledgeExtractionDialog({
           selected: endpointsAreAvailable(relationship, reviewNodes),
         })),
       );
+      setSuggestions([]);
+      setHasRequestedSuggestions(false);
       setHasProposal(true);
     });
   }
@@ -117,6 +125,29 @@ export function KnowledgeExtractionDialog({
           : { ...renamedRelationship, selected: false };
       }),
     );
+
+    setSuggestions((current) =>
+      current.map((suggestion) => {
+        const renamedSuggestion =
+          update.title !== undefined && previousTitle && update.title !== previousTitle
+            ? {
+                ...suggestion,
+                sourceTitle:
+                  suggestion.sourceTitle === previousTitle
+                    ? update.title
+                    : suggestion.sourceTitle,
+                targetTitle:
+                  suggestion.targetTitle === previousTitle
+                    ? update.title
+                    : suggestion.targetTitle,
+              }
+            : suggestion;
+
+        return endpointsAreAvailable(renamedSuggestion, nextNodes)
+          ? renamedSuggestion
+          : { ...renamedSuggestion, selected: false };
+      }),
+    );
   }
 
   function endpointsAreAvailable(
@@ -134,6 +165,41 @@ export function KnowledgeExtractionDialog({
   const relationshipSelectable = relationships.map((relationship) =>
     endpointsAreAvailable(relationship),
   );
+  const suggestionSelectable = suggestions.map(
+    (suggestion) => !suggestion.existing && endpointsAreAvailable(suggestion),
+  );
+  const hasAnalyzableNodes = nodes.some((node) => node.existing || node.selected);
+  const hasImportSelection =
+    nodes.some((node) => !node.existing && node.selected) ||
+    relationships.some((relationship, index) =>
+      relationship.selected && relationshipSelectable[index],
+    ) ||
+    suggestions.some((suggestion, index) =>
+      suggestion.selected && suggestionSelectable[index],
+    );
+
+  function handleSuggestRelationships() {
+    setError(null);
+    setSuggestions([]);
+    setHasRequestedSuggestions(true);
+    startSuggesting(async () => {
+      const result = await suggestKnowledgeRelationshipsAction({
+        notes,
+        nodes: nodes.map(({ title, type, description, selected }) => ({
+          title,
+          type,
+          description,
+          selected,
+        })),
+      });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      setSuggestions(result.data.relationships);
+    });
+  }
 
   function handleImport() {
     setError(null);
@@ -143,9 +209,14 @@ export function KnowledgeExtractionDialog({
           ? relationship
           : { ...relationship, selected: false },
       );
+      const safeSuggestions = suggestions.map((suggestion) =>
+        !suggestion.existing && endpointsAreAvailable(suggestion)
+          ? suggestion
+          : { ...suggestion, selected: false },
+      );
       const result = await importKnowledgeProposalAction({
         nodes,
-        relationships: safeRelationships,
+        relationships: [...safeRelationships, ...safeSuggestions],
       });
       if (!result.success) {
         setError(result.error);
@@ -156,17 +227,21 @@ export function KnowledgeExtractionDialog({
       setNotes("");
       setNodes([]);
       setRelationships([]);
+      setSuggestions([]);
       setHasProposal(false);
+      setHasRequestedSuggestions(false);
       onOpenChange(false);
     });
   }
 
   function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen && !isExtracting && !isImporting) {
+    if (!nextOpen && !isExtracting && !isSuggesting && !isImporting) {
       setError(null);
       setHasProposal(false);
       setNodes([]);
       setRelationships([]);
+      setSuggestions([]);
+      setHasRequestedSuggestions(false);
     }
     onOpenChange(nextOpen);
   }
@@ -237,6 +312,20 @@ export function KnowledgeExtractionDialog({
               ))}
             </section>
 
+            <div className="grid gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSuggestRelationships}
+                disabled={isSuggesting || !hasAnalyzableNodes}
+              >
+                {isSuggesting ? "Suggesting relationships..." : "Suggest relationships"}
+              </Button>
+              <p className="text-xs text-zinc-500">
+                AI suggestions are not saved until you import them.
+              </p>
+            </div>
+
             <section className="grid gap-3">
               <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-400">Relationships</h3>
               {relationships.length === 0 && <p className="text-sm text-zinc-500">No relationships proposed.</p>}
@@ -264,6 +353,63 @@ export function KnowledgeExtractionDialog({
                 </label>
               ))}
             </section>
+
+            {hasRequestedSuggestions && (
+              <section className="grid gap-3">
+                <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+                  Suggested relationships
+                </h3>
+                {suggestions.length === 0 ? (
+                  <p className="text-sm text-zinc-500">No new relationships suggested.</p>
+                ) : (
+                  suggestions.map((suggestion, index) => {
+                    const selectable = suggestionSelectable[index];
+                    return (
+                      <div
+                        key={`${suggestion.sourceTitle}-${suggestion.targetTitle}-${suggestion.relationType}-${index}`}
+                        className="grid gap-2 rounded-md border border-zinc-800 p-3"
+                      >
+                        <label className="flex items-center gap-3 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={suggestion.selected && selectable}
+                            disabled={!selectable}
+                            onChange={(event) =>
+                              setSuggestions((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, selected: event.target.checked }
+                                    : item,
+                                ),
+                              )
+                            }
+                            aria-label={`Select suggested relationship from ${suggestion.sourceTitle} to ${suggestion.targetTitle}`}
+                          />
+                          <span className="truncate text-zinc-200">
+                            {suggestion.sourceTitle}
+                          </span>
+                          <span className="text-xs text-zinc-500">
+                            → {suggestion.relationType} →
+                          </span>
+                          <span className="truncate text-zinc-200">
+                            {suggestion.targetTitle}
+                          </span>
+                        </label>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="rounded border border-zinc-700 px-2 py-0.5 text-zinc-400">
+                            {suggestion.support === "EXPLICIT" ? "Explicit" : "Inferred"}
+                          </span>
+                          {suggestion.existing && (
+                            <span className="text-zinc-500">Already exists</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-zinc-500">{suggestion.evidence}</p>
+                      </div>
+                    );
+                  })
+                )}
+              </section>
+            )}
           </div>
         )}
 
@@ -272,11 +418,18 @@ export function KnowledgeExtractionDialog({
         <DialogFooter>
           {hasProposal ? (
             <>
-              <Button type="button" variant="outline" onClick={() => setHasProposal(false)} disabled={isImporting}>Back</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setHasProposal(false)}
+                disabled={isImporting || isSuggesting}
+              >
+                Back
+              </Button>
               <Button
                 type="button"
                 onClick={handleImport}
-                disabled={isImporting || nodes.every((node) => node.existing || !node.selected)}
+                disabled={isImporting || isSuggesting || !hasImportSelection}
               >
                 {isImporting ? "Adding to your graph..." : "Import selected"}
               </Button>
