@@ -13,6 +13,28 @@ import type {
 const DEFAULT_MODEL = "gpt-4o-mini";
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 
+interface ExtractionCompletionUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+}
+
+interface ExtractionCompletionMessage {
+  content?: string | null;
+  reasoning?: string | null;
+}
+
+interface ExtractionCompletionChoice {
+  finish_reason?: string | null;
+  message?: ExtractionCompletionMessage;
+}
+
+interface ExtractionCompletionPayload {
+  model?: string;
+  choices?: ExtractionCompletionChoice[];
+  usage?: ExtractionCompletionUsage;
+}
+
 export class OpenAICompatibleProvider implements AIService {
   async extractKnowledge(
     input: string,
@@ -30,6 +52,7 @@ export class OpenAICompatibleProvider implements AIService {
       body: JSON.stringify({
         model: process.env.AI_MODEL ?? DEFAULT_MODEL,
         temperature: 0.1,
+        max_tokens: 6000,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: "You extract knowledge into validated JSON." },
@@ -41,11 +64,31 @@ export class OpenAICompatibleProvider implements AIService {
 
     if (!response.ok) throw new Error(`AI provider returned ${response.status}.`);
 
-    const payload = (await response.json()) as {
-      choices?: { message?: { content?: string | null } }[];
-    };
-    const content = payload.choices?.[0]?.message?.content;
-    if (!content) throw new Error("AI provider returned no proposal.");
+    const payload = (await response.json()) as ExtractionCompletionPayload;
+    const choice = payload.choices?.[0];
+    const content = choice?.message?.content;
+
+    if (!content) {
+      const diagnosticParts: string[] = [
+        `status=${response.status}`,
+        `model=${payload.model ?? "unknown"}`,
+        `finish_reason=${choice?.finish_reason ?? "unknown"}`,
+        `hasContent=${Boolean(choice?.message?.content)}`,
+        `hasReasoning=${Boolean(choice?.message?.reasoning)}`,
+      ];
+
+      if (payload.usage?.prompt_tokens !== undefined) {
+        diagnosticParts.push(`promptTokens=${payload.usage.prompt_tokens}`);
+      }
+      if (payload.usage?.completion_tokens !== undefined) {
+        diagnosticParts.push(`completionTokens=${payload.usage.completion_tokens}`);
+      }
+      if (payload.usage?.total_tokens !== undefined) {
+        diagnosticParts.push(`totalTokens=${payload.usage.total_tokens}`);
+      }
+
+      throw new Error(`AI provider returned no proposal (${diagnosticParts.join(" ")}).`);
+    }
 
     let parsedJson: unknown;
     try {

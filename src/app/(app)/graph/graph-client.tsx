@@ -39,17 +39,26 @@ import {
 } from "@/components/graph/relation-form-dialog";
 import { RELATION_TYPE_LABEL } from "@/lib/validation/knowledge-relation";
 import { deleteKnowledgeRelationAction } from "@/server/actions/knowledge-relation-actions";
+import { computeGraphLayout } from "@/lib/graph-layout";
 
 interface GraphClientProps {
   initialNodes: KnowledgeFlowNode[];
   initialEdges: KnowledgeFlowEdge[];
 }
 
-// Same grid constants as graph-transform.ts's initial layout, so newly
-// created nodes fall into the next open grid slot deterministically.
+// Fallback placement for a single brand-new node created with no
+// relationships yet — there is nothing to cluster it against, so it
+// still falls into the next open grid slot. This intentionally no
+// longer matches graph-transform.ts's initial layout, which now uses
+// force-directed placement based on relationships (see graph-layout.ts).
 const COLUMN_WIDTH = 240;
 const ROW_HEIGHT = 180;
 const COLUMNS = 4;
+
+// Horizontal gap between the existing graph and a freshly imported
+// knowledge cluster, so imported nodes don't land on top of existing
+// ones.
+const IMPORT_OFFSET_GAP = 240;
 
 function toFlowNode(result: CreatedNodeResult, index: number): KnowledgeFlowNode {
   return {
@@ -88,9 +97,9 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
   const [searchQuery, setSearchQuery] = useState("");
   const [nodeTypeFilter, setNodeTypeFilter] = useState<KnowledgeFlowNode["data"]["type"] | "">("");
   const [statusFilter, setStatusFilter] = useState<KnowledgeFlowNode["data"]["status"] | "">("");
-  const [reactFlowInstance, setReactFlowInstance] = useState<
-    ReactFlowInstance<KnowledgeFlowNode, KnowledgeFlowEdge> | null
-  >(null);
+ const [reactFlowInstance, setReactFlowInstance] = useState<
+  ReactFlowInstance<KnowledgeFlowNode, KnowledgeFlowEdge> | null
+>(null);
 
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [isEditOpen, setEditOpen] = useState(false);
@@ -237,11 +246,44 @@ export default function GraphClient({ initialNodes, initialEdges }: GraphClientP
   }
 
   function handleKnowledgeImported(result: ImportedKnowledgeResult) {
+    // Cluster the newly imported nodes by the relationships among
+    // themselves (a hub node in this batch gets its neighbors placed
+    // around it, not scattered), then offset the whole cluster to the
+    // right of the existing graph so it doesn't land on top of it.
+    const importedIds = new Set(result.nodes.map((node) => node.id));
+    const importedLayout = computeGraphLayout(
+      result.nodes.map((node) => ({ id: node.id })),
+      result.relations
+        .filter(
+          (relation) =>
+            importedIds.has(relation.sourceId) && importedIds.has(relation.targetId),
+        )
+        .map((relation) => ({ source: relation.sourceId, target: relation.targetId })),
+    );
+
+    const existingRightEdge = nodes.reduce(
+      (max, node) => Math.max(max, node.position.x),
+      0,
+    );
+    const offsetX = nodes.length > 0 ? existingRightEdge + IMPORT_OFFSET_GAP : 0;
+
     setNodes((current) => [
       ...current,
-      ...result.nodes.map((node, index) =>
-        toFlowNode(node, current.length + index),
-      ),
+      ...result.nodes.map((node) => {
+        const local = importedLayout.get(node.id) ?? { x: 0, y: 0 };
+        return {
+          id: node.id,
+          type: "knowledge" as const,
+          position: { x: local.x + offsetX, y: local.y },
+          data: {
+            id: node.id,
+            title: node.title,
+            type: node.type,
+            status: node.status,
+            description: node.description,
+          },
+        };
+      }),
     ]);
     setEdges((current) => [
       ...current,
